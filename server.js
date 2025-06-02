@@ -91,6 +91,37 @@ app.get('/logout', (req, res) => {
   res.redirect('/login.html');
 });
 
+const path = require('path');
+
+app.get('/verPacientes', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'verpacientes.html'));
+});
+
+app.get('/pacientes', (req, res) => {
+  const doctor_id = req.session.userId;
+
+  if (!doctor_id) {
+    return res.status(403).send('No autorizado');
+  }
+
+  const sql = `
+    SELECT pacientes.*, doctores.nombre AS nombre_doctor
+    FROM pacientes
+    JOIN doctores ON pacientes.doctor_id = doctores.id
+    WHERE pacientes.doctor_id = ?
+    ORDER BY pacientes.fecha_consul DESC
+  `;
+
+  db.query(sql, [doctor_id], (err, results) => {
+    if (err) {
+      console.error('Error al obtener pacientes:', err);
+      return res.status(500).send('Error al obtener pacientes');
+    }
+
+    res.json(results);
+  });
+});
+
 app.post('/api/pacientes', (req, res) => {
   const { nombre, edad, fecha_consul, sexo, temperatura, pulso } = req.body;
   const doctor_id = req.session.userId || 1;
