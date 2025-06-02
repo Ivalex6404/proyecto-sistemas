@@ -11,7 +11,6 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// Configuración de sesión
 app.use(session({
   secret: 'secretKey',
   resave: false,
@@ -22,19 +21,16 @@ app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// Redirigir raíz a login.html
 app.get('/', (req, res) => {
   if (req.session.userId) {
-    res.sendFile(__dirname + '/public/index.html'); // página protegida
+    res.sendFile(__dirname + '/public/index.html');
   } else {
     res.redirect('/login.html');
   }
 });
 
-// Servir archivos estáticos
 app.use(express.static('public'));
 
-// Conexión a MySQL
 const db = mysql.createConnection({
   host: 'localhost',
   user: 'root',
@@ -50,7 +46,6 @@ db.connect(err => {
   }
 });
 
-// Registro
 app.post('/registro.html', async (req, res) => {
   const { nombre, correo, password } = req.body;
 
@@ -66,14 +61,12 @@ app.post('/registro.html', async (req, res) => {
       (err) => {
         console.error('Error al registrar:', err);
         if (err) return res.status(500).send('Error al registrar');
-        res.redirect('/login.html'); // redirige al login después del registro
+        res.redirect('/login.html');
       }
     );
   });
 });
 
-
-// Login
 app.post('/login.html', (req, res) => {
   const { correo, password } = req.body;
 
@@ -82,7 +75,6 @@ app.post('/login.html', (req, res) => {
     if (results.length === 0) return res.status(401).send('Correo no encontrado');
 
     const doctor = results[0];
-
     const match = await bcrypt.compare(password, doctor.password);
 
     if (match) {
@@ -94,14 +86,31 @@ app.post('/login.html', (req, res) => {
   });
 });
 
-// Cerrar sesión
 app.get('/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/login.html');
 });
 
+app.post('/api/pacientes', (req, res) => {
+  const { nombre, edad, fecha_consul, sexo, temperatura, pulso } = req.body;
+  const doctor_id = req.session.userId || 1;
 
-// WebSocket
+  const query = `
+    INSERT INTO pacientes (nombre, sexo, edad, fecha_consul, doctor_id, temperatura, pulso)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  db.query(query, [nombre, sexo, edad, fecha_consul, doctor_id, temperatura, pulso], (err) => {
+    if (err) {
+      console.error("Error al guardar paciente:", err);
+      return res.status(500).json({ message: "Error al guardar paciente." });
+    }
+    res.status(200).json({ message: "Paciente guardado exitosamente." });
+  });
+});
+
+let medicionActiva = false;
+
 io.on('connection', (socket) => {
   console.log('Nuevo dispositivo conectado.');
 
@@ -111,12 +120,19 @@ io.on('connection', (socket) => {
 
   socket.on('desde_cliente', (data) => {
     console.log(`Desde página: ${data}`);
+    if (data === "iniciar_medicion") {
+      medicionActiva = true;
+    } else if (data === "detener_medicion") {
+      medicionActiva = false;
+    }
     io.sockets.emit("desde_servidor_comando", data);
   });
 
   socket.on('desde_esp32', (data) => {
     console.log("ESP32:", data);
-    io.sockets.emit("retransmision_esp32", data);
+    if (medicionActiva) {
+      io.sockets.emit("retransmision_esp32", data);
+    }
   });
 
   socket.on('disconnect', () => {
@@ -124,7 +140,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Iniciar servidor
 server.listen(3000, () => {
   console.log('Servidor escuchando en puerto 3000');
 });
