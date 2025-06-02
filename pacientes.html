@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Pacientes Registrados</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h2>Lista de Pacientes</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Edad</th>
+                <th>Fecha de Registro</th>
+                <th>Sexo</th>
+            </tr>
+        </thead>
+        <tbody id="tabla-pacientes">
+            <!-- Los pacientes se cargarán aquí -->
+        </tbody>
+    </table>
+
+    <br>
+    <a href="index.html">Volver</a>
+
+    <script>
+        // Suponiendo que el doctor_id está almacenado en sessionStorage
+        const doctorId = sessionStorage.getItem('doctor_id');
+
+        fetch(`/api/pacientes?doctor_id=${doctorId}`)
+            .then(response => response.json())
+            .then(data => {
+                const tabla = document.getElementById('tabla-pacientes');
+                data.forEach(p => {
+                    const fila = document.createElement('tr');
+                    fila.innerHTML = `
+                        <td>${p.nombre}</td>
+                        <td>${p.edad}</td>
+                        <td>${p.fecha_consul}</td>
+                        <td>${p.sexo}</td>
+                    `;
+                    tabla.appendChild(fila);
+                });
+            });
+    </script>
+</body>
+</html>
