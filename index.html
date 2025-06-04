@@ -1,7 +1,9 @@
+<!DOCTYPE html>
 <html>
 <head>
     <title>Telecomunicaciones</title>
     <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
     <link rel="stylesheet" type="text/css" href="style.css">
     <style>
         #datos {
@@ -33,109 +35,93 @@
     </div>
 
     <div class="contenedor-botones">
-        <button onclick="location.href='/verPacientes'">Pacientes</button>
+        <button onclick="location.href='/verPacientes'" id="verPacientes">Pacientes</button>
         <button id="saveMeasurement">Guardar Medición</button>
     </div>
 
-    <div id="datos">
-        <p><strong>Temperatura:</strong> <span id="temp">0.00</span> °C</p>
-        <p><strong>Oximetro:</strong> <span id="dist">0.00</span> %</p>
+    <div id="data">
+        <p><strong>Temperatura:</strong> <span id="temp">--</span></p>
     </div>
 
     <div id="div_comando"></div>
     <div id="div_grafica"></div>
+    <div id="div_dato"></div>
 
     <img src="https://cdn-icons-png.flaticon.com/512/7404/7404165.png" alt="Oximetro" width="300" class="imagen-izquierda">
     <img src="https://cdn-icons-png.flaticon.com/512/2996/2996114.png" alt="Termometro" width="300" class="imagen-derecha">
 
-    <div class="contenedor-botones">
-        <button id="startMeasurement">Iniciar Medición</button>
-        <button id="stopMeasurement">Detener Medición</button>
-    </div>
-
     <a href="/logout">Cerrar Sesión</a>
-
     <div id="listaPacientes" style="margin-top: 20px;"></div>
 
-
     <script>
-        const socket = io();
-        let medicionActiva = false;
-        let ultimaMedicion = { temperatura: 0, distancia: 0 };
+    const socket = io();
+    let medicionActiva = true;  // Asume que está activo por defecto
 
-        document.getElementById("startMeasurement").addEventListener("click", () => {
-            medicionActiva = true;
-        });
-
-        document.getElementById("stopMeasurement").addEventListener("click", () => {
-            medicionActiva = false;
-        });
-
-        socket.on("retransmision_esp32", function(data) {
-            if (medicionActiva) {
-                try {
-                    const parsed = (typeof data === "string") ? JSON.parse(data) : data;
-                    ultimaMedicion = parsed;
-                    document.getElementById("temp").innerText = parsed.temperatura.toFixed(2);
-                    document.getElementById("dist").innerText = parsed.distancia.toFixed(2);
-                } catch (err) {
-                    console.error("Error procesando datos:", data);
-                }
-            }
-        });
-
-        document.getElementById("saveMeasurement").addEventListener("click", async () => {
-            const nombre = document.getElementById("name").value;
-            const edad = document.getElementById("age").value;
-            const fecha = document.getElementById("date").value;
-            const sexo = document.getElementById("gender").value;
-            const temperatura = parseFloat(document.getElementById("temp").innerText) || 0;
-            const pulso = parseFloat(document.getElementById("dist").innerText) || 0;
-
-            if (!nombre || !edad || !fecha || !sexo) {
-                alert("Por favor completa todos los campos.");
-                return;
-            }
-
-            const paciente = { nombre, edad, fecha_consul: fecha, sexo, temperatura, pulso };
-
+    socket.on("desde_esp32", function(data) {
+        if (medicionActiva) {
             try {
-                const response = await fetch('/api/pacientes', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(paciente)
-                });
+                const temperatura = parseFloat(data);
+                if (!isNaN(temperatura)) {
+                    document.getElementById("temp").innerText = temperatura.toFixed(2);
 
-                const result = await response.json();
-
-                if (response.ok) {
-                    alert(result.message);
+                    document.getElementById("div_dato").innerHTML = `
+                        <div><strong>Temperatura:</strong> <font color="orange">${temperatura.toFixed(2)} °C</font></div>`;
                 } else {
-                    alert("Error: " + result.message);
+                    console.error("Dato no válido:", data);
                 }
             } catch (err) {
-                alert("Error de conexión con el servidor");
-                console.error(err);
+                console.error("Error procesando datos:", data, err);
             }
+        }
+    });
+
+    document.getElementById("verPacientes").addEventListener("click", async () => {
+        const response = await fetch('/api/mis-pacientes');
+        const pacientes = await response.json();
+        const contenedor = document.getElementById("listaPacientes");
+
+        if (pacientes.length === 0) {
+            contenedor.innerHTML = '<p>No hay pacientes registrados.</p>';
+            return;
+        }
+
+        let html = '<h3>Mis Pacientes</h3><ul>';
+        pacientes.forEach(p => {
+            html += `<li><strong>${p.nombre}</strong> - ${p.edad} años - ${p.sexo} - ${p.fecha_consul} - ${p.temperatura} °C</li>`;
         });
+        html += '</ul>';
+        contenedor.innerHTML = html;
+    });
+</script>
 
-        document.getElementById("verPacientes").addEventListener("click", async () => {
-            const response = await fetch('/api/mis-pacientes');
-            const pacientes = await response.json();
-            const contenedor = document.getElementById("listaPacientes");
+<script>
+document.getElementById("saveMeasurement").addEventListener("click", async () => {
+    const nombre = document.getElementById("name").value;
+    const edad = document.getElementById("age").value;
+    const fecha = document.getElementById("date").value;
+    const sexo = document.getElementById("gender").value;
+    const temperatura = parseFloat(document.getElementById("temp").innerText);
+    const pulso = 0; // o puedes agregar otro campo si tienes sensor de pulso
 
-            if (pacientes.length === 0) {
-                contenedor.innerHTML = '<p>No hay pacientes registrados.</p>';
-                return;
-            }
+    // Validación rápida
+    if (!nombre || !edad || !fecha || isNaN(temperatura)) {
+        alert("Por favor completa todos los campos y asegúrate de que haya una medición.");
+        return;
+    }
 
-            let html = '<h3>Mis Pacientes</h3><ul>';
-            pacientes.forEach(p => {
-                html += `<li><strong>${p.nombre}</strong> - ${p.edad} años - ${p.sexo} - ${p.fecha_consul} - ${p.temperatura} °C - ${p.pulso} %</li>`;
-            });
-            html += '</ul>';
-            contenedor.innerHTML = html;
-        });
-    </script>
+    const datos = { nombre, edad, fecha_consul: fecha, sexo, temperatura, pulso };
+
+    const response = await fetch('/api/pacientes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datos)
+    });
+
+    const res = await response.json();
+    alert(res.message || "Error al guardar");
+});
+</script>
+
+
 </body>
 </html>
