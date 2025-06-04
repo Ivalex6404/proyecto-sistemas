@@ -1,57 +1,38 @@
 var socket = io.connect();
-var explodedValues = [2];
 
-socket.on('retransmision_esp32', function(data){
-    var cadena = `<div> <strong> &#128269; Dato:  <font color="orange">` + data + `</strong> </div>`;
-    document.getElementById("div_dato").innerHTML = cadena;
-    explodedValues[1] = parseFloat(data);
-    drawVisualization();
-});
+// Emitir comandos al servidor desde botones en HTML
+const startBtn = document.getElementById("startMeasurement");
+const stopBtn = document.getElementById("stopMeasurement");
 
-socket.on('desde_servidor_comando', function(data){
-    var cadena = `<div> <strong> &#128187; Comando:  <font color="green">` + data + `</strong> </div>`;
-    document.getElementById("div_comando").innerHTML = cadena;
-    explodedValues[0] = parseFloat(data);
-    drawVisualization();
-});
-
-function drawVisualization() {
-    var data = google.visualization.arrayToDataTable([
-        ['Tracker', '1',{ role: 'style' }],
-        ['Dato', explodedValues[0],'color: orange'],
-        ['Otro dato', explodedValues[1],'color: blue']
-    ]);
-
-    var view = new google.visualization.DataView(data);
-    view.setColumns([0, {
-        type: 'number',
-        label: data.getColumnLabel(1),
-        calc: function () {return 0;}
-    }]);
-
-    var chart = new google.visualization.BarChart(document.getElementById('div_grafica'));
-
-    var options = {
-        title: "Monitoreo",
-        width: 1200,
-        height: 300,
-        bar: { groupWidth: "95%" },
-        legend: { position: "none" },
-        animation: {
-            duration: 0
-        },
-        hAxis: {
-            minValue: 0,
-            maxValue: 200
-        }
-    };
-
-    var runOnce = google.visualization.events.addListener(chart, 'ready', function () {
-        google.visualization.events.removeListener(runOnce);
-        chart.draw(data, options);
-    });
-
-    chart.draw(view, options);
+if (startBtn) {
+  startBtn.addEventListener("click", () => {
+    socket.emit("desde_cliente", "START");
+  });
 }
 
-google.load('visualization', '1', {packages: ['corechart'], callback: drawVisualization});
+if (stopBtn) {
+  stopBtn.addEventListener("click", () => {
+    socket.emit("desde_cliente", "STOP");
+  });
+}
+
+// Recibir datos desde el ESP32 (JSON con temperatura y pulso)
+socket.on('retransmision_esp32', function(data){
+  let parsed;
+  try {
+    parsed = typeof data === "string" ? JSON.parse(data) : data;
+  } catch (err) {
+    console.error("Error al parsear JSON:", data);
+    return;
+  }
+
+  // Mostrar en los spans de la interfaz principal
+  document.getElementById("temp").innerText = parsed.temperatura.toFixed(2);
+  document.getElementById("dist").innerText = parsed.pulso.toFixed(2);
+});
+
+// Recibir y mostrar comando recibido
+socket.on('desde_servidor_comando', function(data){
+  var cadena = `<div> <strong> &#128187; Comando:  <font color="green">${data}</font> </strong> </div>`;
+  document.getElementById("div_comando").innerHTML = cadena;
+});
