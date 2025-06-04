@@ -1,0 +1,82 @@
+#include <WiFi.h>
+#include <SocketIoClient.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+// Pines
+#define ONE_WIRE_BUS 4  // DS18B20
+
+// WiFi y servidor
+const char* ssid     = "TecNM-ITT";         // Cambia si es necesario
+const char* password = "";                  // Cambia si es necesario
+const char* server   = "172.16.66.109";     // Dirección del servidor
+const uint16_t port  = 3000;                // Puerto del servidor
+
+// Inicializar cliente de Socket.IO
+SocketIoClient socketIO;
+
+// Sensor de temperatura
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensores(&oneWire);
+
+// Variables
+uint64_t now = 0;
+uint64_t timestamp = 0;
+float temperaturaC;
+
+void setup() {
+  Serial.begin(115200);
+
+  // Inicializar sensor de temperatura
+  sensores.begin();
+
+  // Conectar a WiFi
+  conectar_WiFiSTA();
+
+  // Conectar a servidor Socket.IO
+  socketIO.begin(server, port);
+  socketIO.on("desde_servidor_comando", procesar_mensaje_recibido);
+}
+
+void loop() {
+  now = millis();
+
+  if (now - timestamp > 1000) {
+    timestamp = now;
+
+    // Leer temperatura
+    sensores.requestTemperatures();
+    temperaturaC = sensores.getTempCByIndex(0);
+
+    // Convertir float a char[] con 2 decimales
+    char tempChar[10];
+    dtostrf(temperaturaC, 4, 2, tempChar);  // ancho=4, decimales=2
+
+    // Enviar solo el número
+    socketIO.emit("desde_esp32", tempChar);
+
+    Serial.println("ESP32 → " + String(tempChar));
+  }
+
+  socketIO.loop();
+}
+
+void conectar_WiFiSTA() {
+  delay(10);
+  Serial.println("\nConectando a WiFi...");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    Serial.print(".");
+  }
+
+  Serial.println("\nConexión exitosa");
+  Serial.print("Dirección IP asignada: ");
+  Serial.println(WiFi.localIP());
+}
+
+void procesar_mensaje_recibido(const char* payload, size_t length) {
+  Serial.printf("Mensaje recibido del servidor: %s\n", payload);
+}
