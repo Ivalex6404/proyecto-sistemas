@@ -123,15 +123,15 @@ app.get('/pacientes', (req, res) => {
 });
 
 app.post('/api/pacientes', (req, res) => {
-  const { nombre, edad, fecha_consul, sexo, temperatura, pulso } = req.body;
+  const { nombre, edad, fecha_consul, sexo, temperatura } = req.body;
   const doctor_id = req.session.userId || 1;
 
   const query = `
-    INSERT INTO pacientes (nombre, sexo, edad, fecha_consul, doctor_id, temperatura, pulso)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO pacientes (nombre, sexo, edad, fecha_consul, doctor_id, temperatura)
+    VALUES (?, ?, ?, ?, ?, ?)
   `;
 
-  db.query(query, [nombre, sexo, edad, fecha_consul, doctor_id, temperatura, pulso], (err) => {
+  db.query(query, [nombre, sexo, edad, fecha_consul, doctor_id, temperatura], (err) => {
     if (err) {
       console.error("Error al guardar paciente:", err);
       return res.status(500).json({ message: "Error al guardar paciente." });
@@ -140,7 +140,8 @@ app.post('/api/pacientes', (req, res) => {
   });
 });
 
-let medicionActiva = false;
+
+let medicionActiva = true;
 
 io.on('connection', (socket) => {
   console.log('Nuevo dispositivo conectado.');
@@ -151,18 +152,27 @@ io.on('connection', (socket) => {
 
   socket.on('desde_cliente', (data) => {
     console.log(`Desde página: ${data}`);
+    let comando;
+
     if (data === "iniciar_medicion") {
       medicionActiva = true;
+      comando = "START";
     } else if (data === "detener_medicion") {
       medicionActiva = false;
+      comando = "STOP";
     }
-    io.sockets.emit("desde_servidor_comando", data);
+    
+
+    if (comando) {
+      io.sockets.emit("desde_servidor_comando", comando);
+      console.log("Enviado al ESP32:", comando);
+    }
   });
 
   socket.on('desde_esp32', (data) => {
     console.log("ESP32:", data);
     if (medicionActiva) {
-      io.sockets.emit("retransmision_esp32", data);
+      io.sockets.emit("desde_esp32", data);
     }
   });
 
